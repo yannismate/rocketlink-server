@@ -119,28 +119,7 @@ server.on('connection', (socket) => {
     if(VALIDATORS.lobby_join.validate(data).length > 0) {
       ack({status: 'error', error: 'BAD_REQUEST'});
     } else {
-      if(lobbies[data['room']]) {
-        if(lobbies[data['room']]['bannedPlayerIds'].includes(data['playerId'])) {
-          ack({status: 'error', error: 'PLAYER_BANNED'});
-          return;
-        }
-        if(lobbies[data['room']]['password'] === data['password']) {
-          socket['lobby'] = data['room'];
-          socket['playerId'] = data['playerId'];
-          socket['playerName'] = data['playerName'];
-          broadcastToLobby(data['room'], 'lobby_player_joined', {playerId: data['playerId'], playerName: data['playerName']});
-          lobbies[data['room']]['players'].push({socketId: socket.id, playerId: data['playerId'], playerName: data['playerName']});
-          const players = lobbies[data['room']]['players'].map(item => {
-            return {playerId: item['playerId'], playerName: item['playerName']};
-          });
-          ack({status: 'ok', data: {settings: lobbies[data['room']]['settings'], players: players}});
-        } else {
-          ack({status: 'error', error: 'WRONG_PASSWORD'});
-        }
-      } else {
-        ack({status: 'error', error: 'ROOM_NOT_FOUND'});
-      }
-      /*rateLimiter.consume(socket.handshake.address, 1)
+      rateLimiter.consume(socket.handshake.address, 1)
         .then(() => {
           if(lobbies[data['room']]) {
             if(lobbies[data['room']]['bannedPlayerIds'].includes(data['playerId'])) {
@@ -148,9 +127,14 @@ server.on('connection', (socket) => {
               return;
             }
             if(lobbies[data['room']]['password'] === data['password']) {
+              socket['lobby'] = data['room'];
+              socket['playerId'] = data['playerId'];
+              socket['playerName'] = data['playerName'];
               broadcastToLobby(data['room'], 'lobby_player_joined', {playerId: data['playerId'], playerName: data['playerName']});
               lobbies[data['room']]['players'].push({socketId: socket.id, playerId: data['playerId'], playerName: data['playerName']});
-              const players = lobbies[data['room']]['players'].clone().map(item => {delete item['socketId']; return item});
+              const players = lobbies[data['room']]['players'].map(item => {
+                return {playerId: item['playerId'], playerName: item['playerName']};
+              });
               ack({status: 'ok', data: {settings: lobbies[data['room']]['settings'], players: players}});
             } else {
               ack({status: 'error', error: 'WRONG_PASSWORD'});
@@ -161,7 +145,7 @@ server.on('connection', (socket) => {
         })
         .catch(() => {
           ack({status: 'error', error: 'RATE_LIMIT_EXCEEDED'});
-        });*/
+        });
     }
   });
 
