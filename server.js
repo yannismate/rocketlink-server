@@ -67,10 +67,6 @@ const VALIDATORS = {
   'lobby_kick_player': new Schema({
     playerId: {required : true, type: String, length: {max: 64}},
     ban: {required: true, type: Boolean}
-  }),
-  'peer_signal': new Schema({
-    toPlayerId: {required : true, type: String, length: {max: 64}},
-    data: {required : true}
   })
 
 }
@@ -123,10 +119,31 @@ server.on('connection', (socket) => {
     if(VALIDATORS.lobby_join.validate(data).length > 0) {
       ack({status: 'error', error: 'BAD_REQUEST'});
     } else {
-      rateLimiter.consume(socket.handshake.address, 1)
+      if(lobbies[data['room']]) {
+        if(lobbies[data['room']]['bannedPlayerIds'].includes(data['playerId'])) {
+          ack({status: 'error', error: 'PLAYER_BANNED'});
+          return;
+        }
+        if(lobbies[data['room']]['password'] === data['password']) {
+          socket['lobby'] = data['room'];
+          socket['playerId'] = data['playerId'];
+          socket['playerName'] = data['playerName'];
+          broadcastToLobby(data['room'], 'lobby_player_joined', {playerId: data['playerId'], playerName: data['playerName']});
+          lobbies[data['room']]['players'].push({socketId: socket.id, playerId: data['playerId'], playerName: data['playerName']});
+          const players = lobbies[data['room']]['players'].map(item => {
+            return {playerId: item['playerId'], playerName: item['playerName']};
+          });
+          ack({status: 'ok', data: {settings: lobbies[data['room']]['settings'], players: players}});
+        } else {
+          ack({status: 'error', error: 'WRONG_PASSWORD'});
+        }
+      } else {
+        ack({status: 'error', error: 'ROOM_NOT_FOUND'});
+      }
+      /*rateLimiter.consume(socket.handshake.address, 1)
         .then(() => {
           if(lobbies[data['room']]) {
-            if(lobbies[data['room']]['bannedPlayerIds'].contains(data['playerId'])) {
+            if(lobbies[data['room']]['bannedPlayerIds'].includes(data['playerId'])) {
               ack({status: 'error', error: 'PLAYER_BANNED'});
               return;
             }
@@ -144,7 +161,7 @@ server.on('connection', (socket) => {
         })
         .catch(() => {
           ack({status: 'error', error: 'RATE_LIMIT_EXCEEDED'});
-        });
+        });*/
     }
   });
 
@@ -178,19 +195,27 @@ server.on('connection', (socket) => {
     if(VALIDATORS.lobby_kick_player.validate(data).length > 0) {
       ack({status: 'error', error: 'BAD_REQUEST'});
     } else {
+      if(data['playerId'] === socket['playerId']) {
+        //Can't ban/kick yourself
+        ack({status: 'error', error: 'BAD_REQUEST'});
+        return;
+      }
       if(lobbies[socket['lobby']]['host'] === socket.id) {
 
         const kickedPlayer = lobbies[socket['lobby']]['players'].find(item => item['playerId'] === data['playerId']);
 
         if(kickedPlayer) {
-          ack({status: 'ok'});
+          if(data['ban']) {
+            lobbies[socket['lobby']]['bannedPlayerIds'].push(data['playerId']);
+          }
           broadcastToLobby(socket['lobby'], 'lobby_player_disconnect', {playerId: kickedPlayer['playerId'], playerName: kickedPlayer['playerName'], reason: 'KICKED'});
           lobbies[socket['lobby']]['players'] = lobbies[socket['lobby']]['players'].filter(item => item['playerId'] !== data['playerId']);
           if(lobbies[socket['lobby']]['players'].length === 0) {
             delete lobbies[socket['lobby']];
             console.log(`Deleted empty lobby ${socket['lobby']}`);
           }
-          delete server.sockets.sockets[kickedPlayer['socketId']]['lobby'];
+          delete server.sockets.sockets.get(kickedPlayer['socketId'])['lobby'];
+          ack({status: 'ok'});
         } else {
           ack({status: 'error', error: 'PLAYER_NOT_FOUND'});
         }
@@ -238,13 +263,17 @@ server.on('connection', (socket) => {
       return;
     }
 
-    if(VALIDATORS.peer_signal.validate(data).length > 0) {
+    //Cannot use validator here as it would delete the nested object
+
+    if(!data['to'] || !data['data']) {
       ack({status: 'error', error: 'BAD_REQUEST'});
     } else {
       const recipient = lobbies[socket['lobby']]['players'].find(item => item['playerId'] === data['to']);
       if(recipient) {
         data['from'] = socket['playerId'];
         server.to(recipient['socketId']).emit('peer_signal', data);
+      } else {
+        ack({status: 'error', error: 'RECIPIENT_NOT_FOUND'});
       }
     }
   });
