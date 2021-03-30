@@ -6,4 +6,4 @@ Both the client and this server are inspired by [CrewLink](https://github.com/ot
 ## Installation
 1. Clone this repository with `git clone https://github.com/yannismate/rocketlink-server.git` or download the ZIP file
 2. Run `npm install` to get the needed dependencies
-3. Run the server using `npm start`
+3. Run the server using `node server.js`. The default port of the server is 49123 which can be changed with the --port argument.

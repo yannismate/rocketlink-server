@@ -1,6 +1,19 @@
 const {Server} = require('socket.io');
 const { RateLimiterMemory } = require('rate-limiter-flexible');
 const Schema = require("validate");
+const yargs = require('yargs/yargs');
+const { hideBin } = require('yargs/helpers');
+
+const argv = yargs(hideBin(process.argv))
+  .option('port', {
+    alias: 'p',
+    description: 'Port the server should run on',
+    type: 'number',
+    default: 49123
+  })
+  .help()
+  .alias('help', 'h')
+    .argv;
 
 //5 messages every 10 seconds on 'join' to prevent brute-forcing a lobby
 const rateLimiter = new RateLimiterMemory({
@@ -71,7 +84,8 @@ const VALIDATORS = {
 
 }
 
-const server = new Server(49123);
+const server = new Server(argv.port);
+console.log(`Started RocketLink server on port ${argv.port}`);
 
 server.on('connection', (socket) => {
   console.log(`[${socket.handshake.address} - ${socket.id}] Connected`);
